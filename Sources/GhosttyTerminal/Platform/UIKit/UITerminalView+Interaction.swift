@@ -530,6 +530,16 @@
                 TerminalDebugLog.log(.input, "touch scroll began")
                 stopMomentumScrolling()
 
+                // Ghostty reports wheel events at its last known pointer
+                // position. A fresh surface starts outside the viewport, so
+                // seed it from the touch before forwarding the first scroll.
+                let location = gesture.location(in: self)
+                surface?.sendMousePos(
+                    x: location.x,
+                    y: location.y,
+                    mods: ghostty_input_mods_e(rawValue: 0)
+                )
+
             case .changed:
                 guard activePointerButton == nil else { return }
                 let translation = gesture.translation(in: self)
