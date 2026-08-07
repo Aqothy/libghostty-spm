@@ -98,6 +98,9 @@
 
         func commonInit() {
             backgroundColor = .clear
+            // Ghostty renders the terminal cursor. UIKit still receives a
+            // zero-width caret geometry anchor for IME candidate placement.
+            tintColor = .clear
             isOpaque = false
             isUserInteractionEnabled = true
             updateDisplayScale()

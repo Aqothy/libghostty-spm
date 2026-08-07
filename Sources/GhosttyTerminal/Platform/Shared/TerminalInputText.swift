@@ -11,6 +11,15 @@
 import Foundation
 
 enum TerminalInputText {
+    /// A terminal's Enter key is carriage return; line feed remains Ctrl-J.
+    /// UIKit software keyboards may commit Return as LF or CRLF.
+    static func normalizingSoftwareReturn(_ text: String) -> String {
+        switch text {
+        case "\n", "\r\n": "\r"
+        default: text
+        }
+    }
+
     static func filteredFunctionKeyText(_ text: String?) -> String? {
         guard let text else { return nil }
         if isUIKitNamedFunctionKey(text) {

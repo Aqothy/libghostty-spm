@@ -25,7 +25,16 @@ extension TerminalViewState:
     }
 
     public func terminalDidResize(_ size: TerminalGridMetrics) {
-        surfaceSize = size
+        guard surfaceSize != size else { return }
+        // A platform representable may synchronously report its first grid
+        // while SwiftUI is running make/updateUIView. Publishing inside that
+        // transaction is undefined; defer this informational state update to
+        // the next main-actor turn. Host-managed resize delivery is separate
+        // and remains synchronous.
+        Task { @MainActor [weak self] in
+            guard let self, surfaceSize != size else { return }
+            surfaceSize = size
+        }
     }
 
     public func terminalDidChangeFocus(_ focused: Bool) {

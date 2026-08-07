@@ -3,6 +3,14 @@ import Testing
 
 struct TerminalInputTextTests {
     @Test
+    func `normalizes software keyboard return to carriage return`() {
+        #expect(TerminalInputText.normalizingSoftwareReturn("\n") == "\r")
+        #expect(TerminalInputText.normalizingSoftwareReturn("\r\n") == "\r")
+        #expect(TerminalInputText.normalizingSoftwareReturn("\r") == "\r")
+        #expect(TerminalInputText.normalizingSoftwareReturn("text") == "text")
+    }
+
+    @Test
     func `filters apple private use function keys from text path`() {
         #expect(TerminalInputText.filteredFunctionKeyText("\u{F702}") == nil)
         #expect(TerminalInputText.filteredFunctionKeyText("\u{F703}") == nil)

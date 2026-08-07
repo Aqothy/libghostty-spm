@@ -4,6 +4,7 @@
 //
 
 #if canImport(UIKit)
+    import Foundation
     import GhosttyKit
     import UIKit
 
@@ -45,9 +46,18 @@
             set {}
         }
 
+        /// Inline predictions become marked text, which is a poor fit for a
+        /// terminal and can make the rendered cursor span the prediction.
+        @available(iOS 17.0, macCatalyst 17.0, *)
+        open var inlinePredictionType: UITextInlinePredictionType {
+            get { .no }
+            set {}
+        }
+
         // MARK: - UIKeyInput
 
         open func insertText(_ text: String) {
+            let text = TerminalInputText.normalizingSoftwareReturn(text)
             guard !hardwareKeyHandled else {
                 TerminalDebugLog.log(
                     .input,
@@ -65,6 +75,15 @@
 
                 if stickyModifiers.hasActiveModifiers {
                     _ = handleStickyTextInput(text)
+                    return
+                }
+
+                // Plain committed software-keyboard text is terminal input,
+                // not a paste. Keep Ghostty's text path for exec surfaces and
+                // composition, but let a host-managed backend receive the
+                // bytes directly so bracketed-paste semantics are not applied.
+                if case let .inMemory(session) = configuration.backend {
+                    session.sendInput(Data(text.utf8))
                     return
                 }
             #endif
@@ -222,19 +241,10 @@
         }
 
         open func replace(_: UITextRange, withText text: String) {
-            #if !targetEnvironment(macCatalyst)
-                if inputHandler.hasMarkedText {
-                    inputHandler.insertText(text)
-                    return
-                }
-
-                if stickyModifiers.hasActiveModifiers {
-                    _ = handleStickyTextInput(text)
-                    return
-                }
-            #endif
-
-            inputHandler.insertText(text)
+            // Some software keyboards commit Return through replace rather
+            // than insertText. Keep both entry points on the same normalized,
+            // hardware-deduplicated path.
+            insertText(text)
         }
 
         // MARK: - UITextInput Delegate
@@ -264,7 +274,11 @@
         }
 
         open func caretRect(for position: UITextPosition) -> CGRect {
-            caretRectForPosition(position)
+            // Ghostty renders the visible cursor. Preserve UIKit's anchor for
+            // IME candidate placement without drawing a duplicate caret.
+            var rect = caretRectForPosition(position)
+            rect.size.width = 0
+            return rect
         }
 
         open func selectionRects(
