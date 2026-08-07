@@ -51,6 +51,14 @@
             let filteredModifierFlags = filteredModifierFlags(for: key)
             let isCommandModified = filteredModifierFlags.contains(.command)
             let mods = TerminalInputModifiers(from: filteredModifierFlags)
+            let translationMods = surface.keyTranslationModifiers(for: mods)
+            let optionActsAsAlt = mods.contains(.alt) && !translationMods.contains(.alt)
+            let hardwareText = TerminalInputText.hardwareKeyText(
+                characters: key.characters,
+                charactersIgnoringModifiers: key.charactersIgnoringModifiers,
+                optionActsAsAlt: optionActsAsAlt,
+                usage: UInt16(key.keyCode.rawValue)
+            )
             let keyboardZoomDirection = commandZoomDirection(
                 for: key,
                 action: action,
@@ -103,10 +111,10 @@
             )
             keyEvent.composing = inputHandler.hasMarkedText
 
-            var consumedFlags = filteredModifierFlags
-            consumedFlags.remove(.control)
-            consumedFlags.remove(.command)
-            keyEvent.consumed_mods = TerminalInputModifiers(from: consumedFlags).ghosttyMods
+            var consumedMods = translationMods
+            consumedMods.remove(.ctrl)
+            consumedMods.remove(.super_)
+            keyEvent.consumed_mods = consumedMods.ghosttyMods
 
             guard action == GHOSTTY_ACTION_PRESS || action == GHOSTTY_ACTION_REPEAT else {
                 _ = surface.sendKeyEvent(keyEvent)
@@ -129,14 +137,12 @@
                 return
             }
 
-            guard let text = TerminalInputText.filteredFunctionKeyText(key.characters),
-                  !text.isEmpty
-            else {
+            guard let hardwareText, !hardwareText.isEmpty else {
                 _ = surface.sendKeyEvent(keyEvent)
                 return
             }
 
-            text.withCString { ptr in
+            hardwareText.withCString { ptr in
                 keyEvent.text = ptr
                 _ = surface.sendKeyEvent(keyEvent)
             }

@@ -20,6 +20,22 @@ enum TerminalInputText {
         }
     }
 
+    /// Text associated with a UIKit hardware-key event. Tab must stay a
+    /// physical key so Shift-Tab can be encoded as Backtab. When Ghostty's
+    /// Option-as-Alt policy removes Option from text translation, use UIKit's
+    /// modifier-independent text while retaining Alt on the key event.
+    static func hardwareKeyText(
+        characters: String,
+        charactersIgnoringModifiers: String,
+        optionActsAsAlt: Bool,
+        usage: UInt16
+    ) -> String? {
+        guard usage != 0x2B else { return nil }
+        return filteredFunctionKeyText(
+            optionActsAsAlt ? charactersIgnoringModifiers : characters
+        )
+    }
+
     static func filteredFunctionKeyText(_ text: String?) -> String? {
         guard let text else { return nil }
         if isUIKitNamedFunctionKey(text) {

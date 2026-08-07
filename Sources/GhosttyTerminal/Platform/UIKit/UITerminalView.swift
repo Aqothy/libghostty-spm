@@ -41,8 +41,6 @@
             lazy var terminalInputAccessory = TerminalInputAccessoryView(terminalView: self)
             let stickyModifiers = TerminalStickyModifierState()
             var softwareKeyboardVisible = false
-            var pendingKeyboardDismissOnTouchEnd = false
-            var touchDidScrollDuringCurrentTouch = false
         #endif
 
         #if !targetEnvironment(macCatalyst)

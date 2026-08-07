@@ -20,14 +20,6 @@
             super.touchesBegan(touches, with: event)
             #if targetEnvironment(macCatalyst)
                 becomeFirstResponder()
-            #else
-                pendingKeyboardDismissOnTouchEnd = false
-                touchDidScrollDuringCurrentTouch = false
-                if softwareKeyboardVisible {
-                    pendingKeyboardDismissOnTouchEnd = true
-                } else {
-                    becomeFirstResponder()
-                }
             #endif
         }
 
@@ -48,13 +40,6 @@
             if handleIndirectPointerTouches(touches, phase: .ended, event: event) {
                 return
             }
-            #if !targetEnvironment(macCatalyst)
-                if pendingKeyboardDismissOnTouchEnd, !touchDidScrollDuringCurrentTouch {
-                    resignFirstResponder()
-                }
-                pendingKeyboardDismissOnTouchEnd = false
-                touchDidScrollDuringCurrentTouch = false
-            #endif
             super.touchesEnded(touches, with: event)
         }
 
@@ -65,10 +50,6 @@
             if handleIndirectPointerTouches(touches, phase: .cancelled, event: event) {
                 return
             }
-            #if !targetEnvironment(macCatalyst)
-                pendingKeyboardDismissOnTouchEnd = false
-                touchDidScrollDuringCurrentTouch = false
-            #endif
             super.touchesCancelled(touches, with: event)
         }
 
@@ -344,13 +325,29 @@
             }
         #else
             func setupTouchScrollInput() {
-                let gesture = UIPanGestureRecognizer(
+                let scrollGesture = UIPanGestureRecognizer(
                     target: self,
                     action: #selector(handleTouchScrollGesture(_:))
                 )
-                gesture.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
-                gesture.maximumNumberOfTouches = 1
-                addGestureRecognizer(gesture)
+                scrollGesture.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+                scrollGesture.maximumNumberOfTouches = 1
+                scrollGesture.cancelsTouchesInView = false
+                scrollGesture.delaysTouchesBegan = false
+                scrollGesture.delaysTouchesEnded = false
+                addGestureRecognizer(scrollGesture)
+
+                // Gesture arbitration, rather than manual movement flags,
+                // distinguishes a focus-changing tap from terminal scrolling.
+                // Requiring the pan to fail also keeps a hidden keyboard from
+                // changing the terminal's layout in the middle of a drag.
+                let tapGesture = UITapGestureRecognizer(
+                    target: self,
+                    action: #selector(handleKeyboardToggleTapGesture(_:))
+                )
+                tapGesture.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+                tapGesture.cancelsTouchesInView = false
+                tapGesture.require(toFail: scrollGesture)
+                addGestureRecognizer(tapGesture)
 
                 let longPress = UILongPressGestureRecognizer(
                     target: self,
@@ -511,15 +508,25 @@
             }
         #endif
 
+        #if !targetEnvironment(macCatalyst)
+            @objc func handleKeyboardToggleTapGesture(
+                _ gesture: UITapGestureRecognizer
+            ) {
+                guard gesture.state == .ended else { return }
+                if softwareKeyboardVisible {
+                    resignFirstResponder()
+                } else {
+                    becomeFirstResponder()
+                }
+            }
+        #endif
+
         @objc func handleTouchScrollGesture(
             _ gesture: UIPanGestureRecognizer
         ) {
             switch gesture.state {
             case .began:
                 guard activePointerButton == nil else { return }
-                #if !targetEnvironment(macCatalyst)
-                    touchDidScrollDuringCurrentTouch = true
-                #endif
                 TerminalDebugLog.log(.input, "touch scroll began")
                 stopMomentumScrolling()
 

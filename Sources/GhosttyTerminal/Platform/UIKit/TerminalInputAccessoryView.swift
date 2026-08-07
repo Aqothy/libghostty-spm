@@ -61,6 +61,7 @@
             let hasMarkedText = terminalView?.inputHandler.hasMarkedText ?? false
             let ctrlActivation = terminalView?.stickyModifiers.ctrl ?? .inactive
             let altActivation = terminalView?.stickyModifiers.alt ?? .inactive
+            let shiftActivation = terminalView?.stickyModifiers.shift ?? .inactive
             let commandActivation = terminalView?.stickyModifiers.command ?? .inactive
 
             keyButtons.forEach { $0.applyRegularStyle(style) }
@@ -69,6 +70,7 @@
                 let activation = switch modifier {
                 case .ctrl: ctrlActivation
                 case .alt: altActivation
+                case .shift: shiftActivation
                 case .command: commandActivation
                 }
                 button.applyModifierStyle(activation, isDisabled: hasMarkedText, style: style)
@@ -169,6 +171,9 @@
 
             case .alt:
                 makeTrackedModifierButton(title: "Option", systemImage: "option", modifier: .alt)
+
+            case .shift:
+                makeTrackedModifierButton(title: "Shift", systemImage: "shift", modifier: .shift)
 
             case .command:
                 makeTrackedModifierButton(title: "Command", systemImage: "command", modifier: .command)

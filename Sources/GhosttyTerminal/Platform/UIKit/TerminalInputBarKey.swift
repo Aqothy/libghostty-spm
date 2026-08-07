@@ -8,6 +8,7 @@
         case esc
         case ctrl
         case alt
+        case shift
         case command
         case tab
         case arrowLeft
@@ -23,6 +24,7 @@
             .tab,
             .ctrl,
             .alt,
+            .shift,
             .command,
             .divider,
             .arrowLeft,

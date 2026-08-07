@@ -11,6 +11,32 @@ struct TerminalInputTextTests {
     }
 
     @Test
+    func `hardware tab stays a physical key for shift tab`() {
+        #expect(TerminalInputText.hardwareKeyText(
+            characters: "\t",
+            charactersIgnoringModifiers: "\t",
+            optionActsAsAlt: false,
+            usage: 0x2B
+        ) == nil)
+    }
+
+    @Test
+    func `option as alt uses modifier independent hardware text`() {
+        #expect(TerminalInputText.hardwareKeyText(
+            characters: "å",
+            charactersIgnoringModifiers: "a",
+            optionActsAsAlt: true,
+            usage: 0x04
+        ) == "a")
+        #expect(TerminalInputText.hardwareKeyText(
+            characters: "å",
+            charactersIgnoringModifiers: "a",
+            optionActsAsAlt: false,
+            usage: 0x04
+        ) == "å")
+    }
+
+    @Test
     func `filters apple private use function keys from text path`() {
         #expect(TerminalInputText.filteredFunctionKeyText("\u{F702}") == nil)
         #expect(TerminalInputText.filteredFunctionKeyText("\u{F703}") == nil)

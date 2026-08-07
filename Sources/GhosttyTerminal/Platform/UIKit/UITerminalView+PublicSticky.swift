@@ -4,7 +4,7 @@
 //
 //  Public wrappers around the iOS sticky-modifier state machine so
 //  hosts that suppress `inputAccessoryView` (and supply their own chip
-//  pill UI) can still drive the same Ctrl/Alt/Cmd sticky path that the
+//  pill UI) can still drive the same Ctrl/Alt/Shift/Cmd sticky path that the
 //  bundled `TerminalInputAccessoryView` uses.
 //
 //  Without this surface a host with a custom keyboard accessory has to
@@ -31,6 +31,7 @@
     public enum TerminalPublicStickyModifier: String, Sendable {
         case ctrl
         case alt
+        case shift
         case command
     }
 
@@ -60,6 +61,7 @@
             switch modifier {
             case .ctrl: publicActivation(stickyModifiers.ctrl)
             case .alt: publicActivation(stickyModifiers.alt)
+            case .shift: publicActivation(stickyModifiers.shift)
             case .command: publicActivation(stickyModifiers.command)
             }
         }
@@ -90,6 +92,7 @@
             switch modifier {
             case .ctrl: .ctrl
             case .alt: .alt
+            case .shift: .shift
             case .command: .command
             }
         }

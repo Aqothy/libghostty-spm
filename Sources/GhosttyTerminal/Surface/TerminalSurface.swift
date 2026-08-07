@@ -28,6 +28,18 @@ public final class TerminalSurface {
 
     // MARK: - Input
 
+    func keyTranslationModifiers(
+        for modifiers: TerminalInputModifiers
+    ) -> TerminalInputModifiers {
+        guard let s = surface else { return modifiers }
+        return TerminalInputModifiers(
+            rawValue: ghostty_surface_key_translation_mods(
+                s,
+                modifiers.ghosttyMods
+            ).rawValue
+        )
+    }
+
     @discardableResult
     func sendKeyEvent(_ event: ghostty_input_key_s) -> Bool {
         guard let s = surface else {
