@@ -37,6 +37,16 @@ struct TerminalInputTextTests {
     }
 
     @Test
+    func `synthetic modified text preserves its base layout codepoint`() {
+        #expect(TerminalInputText.unshiftedCodepoint(forModifiedText: "p") == 0x70)
+        #expect(TerminalInputText.unshiftedCodepoint(forModifiedText: "P") == 0x70)
+        #expect(TerminalInputText.unshiftedCodepoint(forModifiedText: "!") == 0x31)
+        #expect(TerminalInputText.unshiftedCodepoint(forModifiedText: "|") == 0x5C)
+        #expect(TerminalInputText.unshiftedCodepoint(forModifiedText: "?") == 0x2F)
+        #expect(TerminalInputText.unshiftedCodepoint(forModifiedText: "ab") == nil)
+    }
+
+    @Test
     func `filters apple private use function keys from text path`() {
         #expect(TerminalInputText.filteredFunctionKeyText("\u{F702}") == nil)
         #expect(TerminalInputText.filteredFunctionKeyText("\u{F703}") == nil)

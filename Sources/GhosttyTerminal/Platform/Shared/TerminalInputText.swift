@@ -36,6 +36,43 @@ enum TerminalInputText {
         )
     }
 
+    /// Base-layout codepoint for a synthetic printable key event. Ghostty
+    /// needs this in addition to `text` to apply enhanced keyboard protocols
+    /// instead of treating a modified key as plain committed text.
+    static func unshiftedCodepoint(forModifiedText text: String) -> UInt32? {
+        guard text.count == 1, let character = text.first else { return nil }
+
+        let unshifted: Character
+        switch character {
+        case "A" ... "Z":
+            guard let lowercase = character.lowercased().first else { return nil }
+            unshifted = lowercase
+        case "!": unshifted = "1"
+        case "@": unshifted = "2"
+        case "#": unshifted = "3"
+        case "$": unshifted = "4"
+        case "%": unshifted = "5"
+        case "^": unshifted = "6"
+        case "&": unshifted = "7"
+        case "*": unshifted = "8"
+        case "(": unshifted = "9"
+        case ")": unshifted = "0"
+        case "~": unshifted = "`"
+        case "_": unshifted = "-"
+        case "+": unshifted = "="
+        case "{": unshifted = "["
+        case "}": unshifted = "]"
+        case "|": unshifted = "\\"
+        case ":": unshifted = ";"
+        case "\"": unshifted = "'"
+        case "<": unshifted = ","
+        case ">": unshifted = "."
+        case "?": unshifted = "/"
+        default: unshifted = character
+        }
+        return unshifted.unicodeScalars.first?.value
+    }
+
     static func filteredFunctionKeyText(_ text: String?) -> String? {
         guard let text else { return nil }
         if isUIKitNamedFunctionKey(text) {

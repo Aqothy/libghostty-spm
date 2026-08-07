@@ -213,6 +213,9 @@
                 for: mapping.key
             )
             event.mods = modifiers.union(mapping.extraModifiers).ghosttyMods
+            event.consumed_mods = mapping.extraModifiers.ghosttyMods
+            event.unshifted_codepoint = TerminalInputText
+                .unshiftedCodepoint(forModifiedText: text) ?? 0
 
             if !modifiers.contains(.super_) {
                 text.withCString { ptr in
@@ -250,6 +253,16 @@
             case "7": return (GHOSTTY_KEY_DIGIT_7, [])
             case "8": return (GHOSTTY_KEY_DIGIT_8, [])
             case "9": return (GHOSTTY_KEY_DIGIT_9, [])
+            case "!": return (GHOSTTY_KEY_DIGIT_1, [.shift])
+            case "@": return (GHOSTTY_KEY_DIGIT_2, [.shift])
+            case "#": return (GHOSTTY_KEY_DIGIT_3, [.shift])
+            case "$": return (GHOSTTY_KEY_DIGIT_4, [.shift])
+            case "%": return (GHOSTTY_KEY_DIGIT_5, [.shift])
+            case "^": return (GHOSTTY_KEY_DIGIT_6, [.shift])
+            case "&": return (GHOSTTY_KEY_DIGIT_7, [.shift])
+            case "*": return (GHOSTTY_KEY_DIGIT_8, [.shift])
+            case "(": return (GHOSTTY_KEY_DIGIT_9, [.shift])
+            case ")": return (GHOSTTY_KEY_DIGIT_0, [.shift])
             case "`": return (GHOSTTY_KEY_BACKQUOTE, [])
             case "~": return (GHOSTTY_KEY_BACKQUOTE, [.shift])
             case "-": return (GHOSTTY_KEY_MINUS, [])
