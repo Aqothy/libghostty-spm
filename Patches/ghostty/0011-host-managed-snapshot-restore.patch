@@ -1,0 +1,131 @@
+diff --git i/include/ghostty.h w/include/ghostty.h
+index 814a725b6..e45a65bd9 100644
+--- i/include/ghostty.h
++++ w/include/ghostty.h
+@@ -1135,6 +1135,13 @@ GHOSTTY_API void ghostty_surface_update_config(ghostty_surface_t, ghostty_config
+ GHOSTTY_API bool ghostty_surface_needs_confirm_quit(ghostty_surface_t);
+ GHOSTTY_API bool ghostty_surface_process_exited(ghostty_surface_t);
+ GHOSTTY_API void ghostty_surface_write_buffer(ghostty_surface_t, const uint8_t*, uintptr_t);
++/**
++ * Transactionally replace a host-managed surface's terminal model from one
++ * complete GHOSTSNP payload. The payload is decoded before the renderer lock
++ * is acquired and installed only when its grid matches the current surface.
++ * Returns true after the replacement is fully installed.
++ */
++GHOSTTY_API bool ghostty_surface_restore_snapshot(ghostty_surface_t, const uint8_t*, uintptr_t);
+ GHOSTTY_API void ghostty_surface_process_exit(ghostty_surface_t, uint32_t, uint64_t);
+ GHOSTTY_API void ghostty_surface_refresh(ghostty_surface_t);
+ GHOSTTY_API void ghostty_surface_draw(ghostty_surface_t);
+diff --git i/src/apprt/embedded.zig w/src/apprt/embedded.zig
+index 527739a82..16ba52aaa 100644
+--- i/src/apprt/embedded.zig
++++ w/src/apprt/embedded.zig
+@@ -1655,6 +1655,19 @@ pub const CAPI = struct {
+         surface.core_surface.io.processOutput(ptr[0..len]);
+     }
+ 
++    export fn ghostty_surface_restore_snapshot(
++        surface: *Surface,
++        ptr: [*]const u8,
++        len: usize,
++    ) bool {
++        if (len == 0) return false;
++        surface.core_surface.io.restoreSnapshot(ptr[0..len]) catch |err| {
++            log.warn("error restoring terminal snapshot err={}", .{err});
++            return false;
++        };
++        return true;
++    }
++
+     export fn ghostty_surface_process_exit(
+         surface: *Surface,
+         exit_code: u32,
+diff --git i/src/termio/Termio.zig w/src/termio/Termio.zig
+index cdcab9532..4da8d06c4 100644
+--- i/src/termio/Termio.zig
++++ w/src/termio/Termio.zig
+@@ -641,6 +641,84 @@ pub fn focusGained(self: *Termio, td: *ThreadData, focused: bool) !void {
+     try self.backend.focusGained(td, focused);
+ }
+ 
++/// Transactionally replace the terminal model with a complete GHOSTSNP
++/// payload. Decoding and configuration happen off the renderer lock; the
++/// critical section only validates the grid and swaps fully-owned state.
++pub fn restoreSnapshot(self: *Termio, buf: []const u8) !void {
++    if (buf.len == 0) return error.EmptySnapshot;
++
++    var reader: std.Io.Reader = .fixed(buf);
++    var decoded = try terminalpkg.snapshot.decodeExact(
++        self.alloc,
++        global.io(),
++        &reader,
++        .{ .max_continuation_bytes = 64 * 1024 },
++    );
++    defer decoded.deinit(self.alloc);
++
++    // The daemon snapshot carries runtime terminal state, while the embedded
++    // surface remains authoritative for configurable defaults and image
++    // loading policy.
++    const restored = &decoded.terminal.?;
++    restored.setDefaultCursorStyle(self.config.cursor_style);
++    restored.setDefaultCursorBlink(self.config.cursor_blink);
++    restored.colors.palette.changeDefault(self.config.palette);
++    restored.colors.background.default = self.config.background.toTerminalRGB();
++    restored.colors.foreground.default = self.config.foreground.toTerminalRGB();
++    restored.colors.cursor.default = cursor: {
++        const color = self.config.cursor_color orelse break :cursor null;
++        break :cursor color.toTerminalRGB() orelse break :cursor null;
++    };
++    try restored.setKittyGraphicsSizeLimit(
++        self.alloc,
++        self.config.image_storage_limit,
++    );
++    restored.setKittyGraphicsLoadingLimits(
++        .allWithTempDir(global.tmpDirPath()),
++    );
++
++    const handler: StreamHandler = .{
++        .alloc = self.alloc,
++        .termio_mailbox = &self.mailbox,
++        .surface_mailbox = self.surface_mailbox,
++        .renderer_state = self.renderer_state,
++        .renderer_wakeup = self.renderer_wakeup,
++        .renderer_mailbox = self.renderer_mailbox,
++        .size = &self.size,
++        .terminal = &self.terminal,
++        .osc_color_report_format = self.config.osc_color_report_format,
++        .clipboard_write = self.config.clipboard_write,
++        .enquiry_response = self.config.enquiry_response,
++    };
++    var replacement_stream: StreamHandler.Stream = .init(.{
++        .allocator = self.alloc,
++        .handler = handler,
++    });
++    errdefer replacement_stream.deinit();
++
++    self.renderer_state.mutex.lockUncancelable(global.io());
++    defer self.renderer_state.mutex.unlock(global.io());
++
++    const grid = self.size.grid();
++    if (restored.cols != grid.columns or restored.rows != grid.rows) {
++        return error.SnapshotGridMismatch;
++    }
++
++    self.terminal_stream.deinit();
++    self.terminal.deinit(self.alloc);
++    self.terminal = decoded.toOwned();
++    self.terminal.width_px = self.terminal.cols * self.size.cell.width;
++    self.terminal.height_px = self.terminal.rows * self.size.cell.height;
++    self.terminal_stream = replacement_stream;
++
++    switch (decoded.continuation) {
++        .ground => {},
++        .bytes => |bytes| self.terminal_stream.nextSlice(bytes),
++    }
++
++    self.renderer_wakeup.notify() catch {};
++}
++
+ /// Process output from the pty. This is the manual API that users can
+ /// call with pty data but it is also called by the read thread when using
+ /// an exec subprocess.

@@ -4,6 +4,7 @@ import GhosttyKit
 /// Serializes host output while keeping the raw surface alive for each C call.
 final class InMemoryTerminalSurfaceAccess: @unchecked Sendable {
     typealias Write = @Sendable (ghostty_surface_t, Data) -> Void
+    typealias RestoreSnapshot = @Sendable (ghostty_surface_t, Data) -> Bool
     typealias ProcessExit = @Sendable (ghostty_surface_t, UInt32, UInt64) -> Void
 
     private let condition = NSCondition()
@@ -12,6 +13,7 @@ final class InMemoryTerminalSurfaceAccess: @unchecked Sendable {
         qos: .userInitiated
     )
     private let write: Write
+    private let restoreSnapshot: RestoreSnapshot
     private let processExit: ProcessExit
 
     private var surface: ghostty_surface_t?
@@ -22,9 +24,11 @@ final class InMemoryTerminalSurfaceAccess: @unchecked Sendable {
 
     init(
         write: @escaping Write,
+        restoreSnapshot: @escaping RestoreSnapshot,
         processExit: @escaping ProcessExit
     ) {
         self.write = write
+        self.restoreSnapshot = restoreSnapshot
         self.processExit = processExit
     }
 
@@ -69,6 +73,19 @@ final class InMemoryTerminalSurfaceAccess: @unchecked Sendable {
         return true
     }
 
+    func restoreSnapshot(_ data: Data) async -> Bool? {
+        guard let generation = currentGeneration else { return nil }
+
+        return await withCheckedContinuation { continuation in
+            outputQueue.async { [self] in
+                let restored = withSurface(generation: generation) { surface in
+                    restoreSnapshot(surface, data)
+                }
+                continuation.resume(returning: restored)
+            }
+        }
+    }
+
     @discardableResult
     func enqueueProcessExit(
         exitCode: UInt32,
@@ -108,20 +125,20 @@ final class InMemoryTerminalSurfaceAccess: @unchecked Sendable {
         return surface == nil ? nil : generation
     }
 
-    private func withSurface(
+    private func withSurface<Result>(
         generation expectedGeneration: UInt64,
-        _ operation: (ghostty_surface_t) -> Void
-    ) {
+        _ operation: (ghostty_surface_t) -> Result
+    ) -> Result? {
         condition.lock()
         guard generation == expectedGeneration, let surface else {
             condition.unlock()
-            return
+            return nil
         }
         activeOperations += 1
         condition.unlock()
 
         defer { finishOperation() }
-        operation(surface)
+        return operation(surface)
     }
 
     private func finishOperation() {

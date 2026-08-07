@@ -1,7 +1,7 @@
-diff --git a/src/build/GhosttyFrameData.zig b/src/build/GhosttyFrameData.zig
-index 8469759..2b3965d 100644
---- a/src/build/GhosttyFrameData.zig
-+++ b/src/build/GhosttyFrameData.zig
+diff --git c/src/build/GhosttyFrameData.zig i/src/build/GhosttyFrameData.zig
+index be61f029f..2b3965ddd 100644
+--- c/src/build/GhosttyFrameData.zig
++++ i/src/build/GhosttyFrameData.zig
 @@ -13,7 +13,7 @@ pub fn init(b: *std.Build) !GhosttyFrameData {
  
      // Generate the Zig source file that embeds the compressed data
@@ -19,16 +19,16 @@ index 8469759..2b3965d 100644
 -        .name = "framegen",
 -        .root_module = b.createModule(.{
 -            .target = b.graph.host,
+-            .link_libc = true,
 -        }),
 -    });
--    exe.addCSourceFile(.{
+-    exe.root_module.addCSourceFile(.{
 -        .file = b.path("src/build/framegen/main.c"),
 -        .flags = &.{},
 -    });
--    exe.linkLibC();
 -
 -    if (b.systemIntegrationOption("zlib", .{})) {
--        exe.linkSystemLibrary2("zlib", .{
+-        exe.root_module.linkSystemLibrary("zlib", .{
 -            .preferred_link_mode = .dynamic,
 -            .search_strategy = .mode_first,
 -        });
@@ -37,7 +37,7 @@ index 8469759..2b3965d 100644
 -            .target = b.graph.host,
 -            .optimize = .ReleaseFast,
 -        })) |zlib_dep| {
--            exe.linkLibrary(zlib_dep.artifact("z"));
+-            exe.root_module.linkLibrary(zlib_dep.artifact("z"));
 -        }
 -    }
 -
@@ -53,7 +53,7 @@ index 8469759..2b3965d 100644
          },
      };
  }
-diff --git a/src/build/framegen/framedata.compressed b/src/build/framegen/framedata.compressed
+diff --git c/src/build/framegen/framedata.compressed i/src/build/framegen/framedata.compressed
 new file mode 100644
 index 0000000000000000000000000000000000000000..736f7bc01b9ffc0e06e87572f8e48f91243ef50a
 GIT binary patch

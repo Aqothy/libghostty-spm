@@ -68,57 +68,26 @@ print("[+] patched Config.zig")
 shared_path = source_dir / "src/build/SharedDeps.zig"
 text = shared_path.read_text()
 
-# Gate glslang — wrap with custom_shaders check
+# Gate glslang without changing the surrounding block structure.
 text = text.replace(
     '    // Glslang\n    if (b.lazyDependency("glslang", .{',
-    '    // Glslang — only needed for custom shaders\n    if (self.config.custom_shaders) if (b.lazyDependency("glslang", .{',
+    '    // Glslang — only needed for custom shaders\n    if (if (self.config.custom_shaders) b.lazyDependency("glslang", .{',
 )
-# Close the extra if at end of glslang block
 text = text.replace(
-    """            step.linkLibrary(glslang_dep.artifact("glslang"));
-            try static_libs.append(
-                b.allocator,
-                glslang_dep.artifact("glslang").getEmittedBin(),
-            );
-        }
-    }
-
-    // Spirv-cross""",
-    """            step.linkLibrary(glslang_dep.artifact("glslang"));
-            try static_libs.append(
-                b.allocator,
-                glslang_dep.artifact("glslang").getEmittedBin(),
-            );
-        }
-    };
-
-    // Spirv-cross""",
+    '    })) |glslang_dep| {',
+    '    }) else null) |glslang_dep| {',
+    1,
 )
 
-# Gate spirv-cross — wrap with custom_shaders check
+# Gate spirv-cross the same way.
 text = text.replace(
     '    // Spirv-cross\n    if (b.lazyDependency("spirv_cross", .{',
-    '    // Spirv-cross — only needed for custom shaders\n    if (self.config.custom_shaders) if (b.lazyDependency("spirv_cross", .{',
+    '    // Spirv-cross — only needed for custom shaders\n    if (if (self.config.custom_shaders) b.lazyDependency("spirv_cross", .{',
 )
 text = text.replace(
-    """            step.linkLibrary(spirv_cross_dep.artifact("spirv_cross"));
-            try static_libs.append(
-                b.allocator,
-                spirv_cross_dep.artifact("spirv_cross").getEmittedBin(),
-            );
-        }
-    }
-
-    // Sentry""",
-    """            step.linkLibrary(spirv_cross_dep.artifact("spirv_cross"));
-            try static_libs.append(
-                b.allocator,
-                spirv_cross_dep.artifact("spirv_cross").getEmittedBin(),
-            );
-        }
-    };
-
-    // Sentry""",
+    '    })) |spirv_cross_dep| {',
+    '    }) else null) |spirv_cross_dep| {',
+    1,
 )
 
 shared_path.write_text(text)

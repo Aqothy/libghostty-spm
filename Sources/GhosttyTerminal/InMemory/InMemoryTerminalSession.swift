@@ -41,6 +41,7 @@ public final class InMemoryTerminalSession: @unchecked Sendable {
         self.suppressesPixelOnlyResizes = suppressesPixelOnlyResizes
         surfaceAccess = InMemoryTerminalSurfaceAccess(
             write: Self.writeToSurface,
+            restoreSnapshot: Self.restoreSnapshotOnSurface,
             processExit: Self.reportProcessExit
         )
     }
@@ -50,6 +51,8 @@ public final class InMemoryTerminalSession: @unchecked Sendable {
         resize: @escaping @Sendable (InMemoryTerminalViewport) -> Void,
         suppressesPixelOnlyResizes: Bool = false,
         surfaceWrite: @escaping InMemoryTerminalSurfaceAccess.Write,
+        surfaceRestoreSnapshot: @escaping InMemoryTerminalSurfaceAccess.RestoreSnapshot =
+            InMemoryTerminalSession.restoreSnapshotOnSurface,
         processExit: @escaping InMemoryTerminalSurfaceAccess.ProcessExit =
             InMemoryTerminalSession.reportProcessExit
     ) {
@@ -58,6 +61,7 @@ public final class InMemoryTerminalSession: @unchecked Sendable {
         self.suppressesPixelOnlyResizes = suppressesPixelOnlyResizes
         surfaceAccess = InMemoryTerminalSurfaceAccess(
             write: surfaceWrite,
+            restoreSnapshot: surfaceRestoreSnapshot,
             processExit: processExit
         )
     }
@@ -168,6 +172,22 @@ public final class InMemoryTerminalSession: @unchecked Sendable {
             .output,
             "terminal <- host \(TerminalDebugLog.describe(data))"
         )
+    }
+
+    /// Restore the complete terminal model from a GHOSTSNP payload.
+    ///
+    /// The restore is ordered with `receive(_:)` calls on this session and
+    /// returns only after Ghostty has transactionally installed the model.
+    public func restore(snapshot data: Data) async throws {
+        guard !data.isEmpty else {
+            throw InMemoryTerminalSnapshotRestoreError.invalidSnapshot
+        }
+        guard let restored = await surfaceAccess.restoreSnapshot(data) else {
+            throw InMemoryTerminalSnapshotRestoreError.surfaceUnavailable
+        }
+        guard restored else {
+            throw InMemoryTerminalSnapshotRestoreError.invalidSnapshot
+        }
     }
 
     /// Feed a UTF-8 string into the terminal from the host backend.
@@ -315,6 +335,22 @@ public final class InMemoryTerminalSession: @unchecked Sendable {
                 return
             }
             ghostty_surface_write_buffer(surface, ptr, UInt(buffer.count))
+        }
+    }
+
+    private static func restoreSnapshotOnSurface(
+        _ surface: ghostty_surface_t,
+        _ data: Data
+    ) -> Bool {
+        data.withUnsafeBytes { buffer in
+            guard let pointer = buffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
+                return false
+            }
+            return ghostty_surface_restore_snapshot(
+                surface,
+                pointer,
+                UInt(buffer.count)
+            )
         }
     }
 

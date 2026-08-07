@@ -53,12 +53,66 @@ struct InMemoryTerminalSessionOutputQueueTests {
     }
 
     @Test
+    func `snapshot restore is ordered with writes and awaits installation`() async throws {
+        let restoreStarted = AsyncSignal()
+        let allowRestoreToFinish = DispatchSemaphore(value: 0)
+        let events = LockedValues<String>()
+        let session = InMemoryTerminalSession(
+            write: { _ in },
+            resize: { _ in },
+            surfaceWrite: { _, data in
+                events.append(String(decoding: data, as: UTF8.self))
+            },
+            surfaceRestoreSnapshot: { _, data in
+                events.append("restore:\(String(decoding: data, as: UTF8.self))")
+                restoreStarted.signal()
+                allowRestoreToFinish.wait()
+                return true
+            }
+        )
+        session.setSurface(testSurface(3))
+
+        session.receive("before")
+        let restoreTask = Task {
+            try await session.restore(snapshot: Data("snapshot".utf8))
+        }
+        let timeoutTask = Task {
+            try await Task.sleep(for: .seconds(1))
+            restoreStarted.signal()
+        }
+        await restoreStarted.wait()
+        timeoutTask.cancel()
+        session.receive("after")
+
+        #expect(events.values == ["before", "restore:snapshot"])
+        allowRestoreToFinish.signal()
+        try await restoreTask.value
+        session.waitForPendingOutput()
+
+        #expect(events.values == ["before", "restore:snapshot", "after"])
+    }
+
+    @Test
+    func `restore reports a missing surface`() async {
+        let session = makeSession { _, _ in }
+
+        do {
+            try await session.restore(snapshot: Data("snapshot".utf8))
+            Issue.record("expected restore to fail without an active surface")
+        } catch InMemoryTerminalSnapshotRestoreError.surfaceUnavailable {
+            // Expected.
+        } catch {
+            Issue.record("unexpected error: \(error)")
+        }
+    }
+
+    @Test
     func `surface teardown waits for active write and drops queued stale writes`() {
         let firstWriteStarted = DispatchSemaphore(value: 0)
         let allowFirstWriteToFinish = DispatchSemaphore(value: 0)
         let clearFinished = DispatchSemaphore(value: 0)
         let writes = LockedValues<String>()
-        let surface = SendableSurface(testSurface(3))
+        let surface = SendableSurface(testSurface(4))
         let session = makeSession { _, data in
             let value = String(decoding: data, as: UTF8.self)
             writes.append(value)
@@ -104,8 +158,8 @@ struct InMemoryTerminalSessionOutputQueueTests {
         let secondSession = makeSession { _, _ in
             secondWriteFinished.signal()
         }
-        firstSession.setSurface(testSurface(4))
-        secondSession.setSurface(testSurface(5))
+        firstSession.setSurface(testSurface(5))
+        secondSession.setSurface(testSurface(6))
 
         firstSession.receive("blocked")
         #expect(firstWriteStarted.wait(timeout: .now() + 1) == .success)
@@ -137,6 +191,38 @@ private struct SendableSurface: @unchecked Sendable {
 
     init(_ rawValue: ghostty_surface_t) {
         self.rawValue = rawValue
+    }
+}
+
+private final class AsyncSignal: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var isSignaled = false
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            if isSignaled {
+                lock.unlock()
+                continuation.resume()
+            } else {
+                self.continuation = continuation
+                lock.unlock()
+            }
+        }
+    }
+
+    func signal() {
+        lock.lock()
+        guard !isSignaled else {
+            lock.unlock()
+            return
+        }
+        isSignaled = true
+        let continuation = continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.resume()
     }
 }
 

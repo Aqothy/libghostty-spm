@@ -30,7 +30,8 @@ fi
 apply_unified_patch() {
     local patch_file="$1"
 
-    if [ -d "$SOURCE_DIR/.git" ] && command -v git >/dev/null 2>&1; then
+    if command -v git >/dev/null 2>&1 &&
+        git -C "$SOURCE_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
         if git -C "$SOURCE_DIR" apply --check --reverse "$patch_file" >/dev/null 2>&1; then
             echo "[+] patch already applied: $(basename "$patch_file")"
             return

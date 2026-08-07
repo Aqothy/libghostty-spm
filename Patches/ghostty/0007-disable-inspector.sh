@@ -77,18 +77,13 @@ patch_file("src/build/SharedDeps.zig", [
         '    // cimgui\n'
         '    if (b.lazyDependency("dcimgui", .{',
         '    // cimgui — only needed for inspector\n'
-        '    if (self.config.inspector) if (b.lazyDependency("dcimgui", .{',
+        '    if (if (self.config.inspector) b.lazyDependency("dcimgui", .{',
     ),
-    # Close the extra if — find the end of the dcimgui block
     (
-        '        );\n'
-        '    }\n'
-        '\n'
-        '    // Fonts',
-        '        );\n'
-        '    };\n'
-        '\n'
-        '    // Fonts',
+        '        .@"backend-opengl3" = !target.result.os.tag.isDarwin(),\n'
+        '    })) |dep| {',
+        '        .@"backend-opengl3" = !target.result.os.tag.isDarwin(),\n'
+        '    }) else null) |dep| {',
     ),
 ])
 
